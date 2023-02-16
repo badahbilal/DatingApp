@@ -5,8 +5,10 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using API.Data;
+using API.DTOs;
 using API.Entities;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace API.Controllers
 {
@@ -24,14 +26,29 @@ namespace API.Controllers
                                // POST: /api/account/register?username=sam&password=password
                                //       This method allow ApiController to bind the username and password
                                //       From the request url to action parameters
-        public async Task<ActionResult<AppUser>> Register(string username, string password)
+        public async Task<ActionResult<AppUser>> Register(RegisterDto registerDto)
         {
+
+            // When we use [ApiController] we don't need to bind the username and password
+            // and we don't need to check if the username and password are valid
+            // because ApiController will check if the username and password are valid
+            // and if the username and password are valid we can bind the username and password
+            // also we don't neet to use FromBody method to bind data comming from the request
+            // if(ModelState.IsValid){
+
+            // }
+
+            if (await ValidateUser(registerDto.username))
+            {
+                return BadRequest("Username is already registered");
+            }
+
             using var hmac = new HMACSHA256();
 
             var user = new AppUser
             {
-                UserName = username,
-                PasswordHash = hmac.ComputeHash(Encoding.UTF8.GetBytes(password)),
+                UserName = registerDto.username.ToLower(),
+                PasswordHash = hmac.ComputeHash(Encoding.UTF8.GetBytes(registerDto.password)),
                 PasswordSalt = hmac.Key
             };
 
@@ -40,5 +57,32 @@ namespace API.Controllers
 
             return user;
         }
+
+        [HttpPost("login")]
+        public async Task<ActionResult<AppUser>> Login(LoginDto loginDto)
+        {
+            var user = await _context.Users.SingleOrDefaultAsync(x =>
+                    x.UserName.ToLower() == loginDto.UserName.ToLower());
+
+            if (user == null)
+                return Unauthorized("invalid username");
+
+            using var hmac = new HMACSHA256(user.PasswordSalt);
+
+            var computedHash = hmac.ComputeHash(Encoding.UTF8.GetBytes(loginDto.Password));
+
+            for (int i = 0; i < computedHash.Length; i++)
+            {
+                if (computedHash[i] != user.PasswordHash[i]) return Unauthorized("Invalid password");
+            }
+
+            return Ok(user);
+        }
+
+        private async Task<bool> ValidateUser(string usenamer)
+        {
+            return await _context.Users.AnyAsync(x => x.UserName == usenamer.ToLower());
+        }
+
     }
 }
