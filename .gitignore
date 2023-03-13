@@ -478,5 +478,6 @@ $RECYCLE.BIN/
 API/appsettings.json
 
 
-#
+
+#Global File
 API/global.json
